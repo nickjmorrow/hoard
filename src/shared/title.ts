@@ -1,5 +1,5 @@
 // The shape of a title page, shared by the server, the client and the scripts.
-// Books live in Stacks (~/Projects/stacks), which uses the same page shape with `type:: book`;
+// Books live in Stacks (a separate app), which uses the same page shape with `type:: book`;
 // Hoard never reads or writes those pages.
 // The format itself is documented in docs/title-page-format.md.
 

@@ -28,8 +28,9 @@ function storeTitle(qc: QueryClient, saved: Title): void {
 }
 
 /**
- * A want-list title that was just started has a Grimoire page now, with a new id: rename it in the
- * library, and if its page is open, carry on there (replacing the old address).
+ * The server saved the title under a different id than the one edited (an old id resolves to the
+ * title it became): rename it in the library, and if its page is open, carry on there (replacing
+ * the old address).
  */
 function followMove(qc: QueryClient, oldId: string, saved: Title): void {
   qc.setQueryData<LibraryResponse>(LIBRARY_KEY, (lib) => lib && {
@@ -239,7 +240,7 @@ export function useSaveNote() {
   })
 }
 
-/** Take a title off Hoard's lists: DELETE /api/titles/:pageId/hoard. The Grimoire page stays. */
+/** Delete a title from Hoard's store: DELETE /api/titles/:pageId/hoard. Nothing in Grimoire changes. */
 export function useRemoveFromHoard() {
   const qc = useQueryClient()
   return useMutation({

@@ -41,7 +41,7 @@ export function AddTitle() {
   const badYear = isGame && typedYear !== '' && !/^\d{4}$/.test(typedYear)
 
   // Only the Save button saves. Enter (or a phone's Search key) in a field must not: an unmatched
-  // title would become a Grimoire page at once, and Remove only takes it off Hoard's lists.
+  // title would be saved at once, before a lookup match is chosen.
   // So there's no <form> here (the tag picker's own new-tag form also can't nest in one).
   const save = () => {
     const typed = name.trim()
