@@ -2,15 +2,16 @@
 node_modules
 dist/
 .env
+.vitest/
+.DS_Store
 migration-report.md
 test-results/
 playwright-report/
 
-# Icon work: Apple's own icons are for local comparison only, never committed
+# Icon design drafts and reference images: kept on disk, not published
 icons/**/ref-*.png
-icons/gallery/index.html
-icons/gallery/ideas.js
-icons/icon-work/*.png
+icons/gallery/
+icons/icon-work/
 icons/preview/
 CLAUDE.local.md
 
