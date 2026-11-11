@@ -1,0 +1,19 @@
+.superpowers/
+node_modules
+dist/
+.env
+migration-report.md
+test-results/
+playwright-report/
+
+# Icon work: Apple's own icons are for local comparison only, never committed
+icons/**/ref-*.png
+icons/gallery/index.html
+icons/gallery/ideas.js
+icons/icon-work/*.png
+icons/preview/
+CLAUDE.local.md
+
+# Planning and history docs: kept on disk, not published
+docs/intent/
+docs/superpowers/

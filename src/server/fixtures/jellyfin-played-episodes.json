@@ -1,0 +1,121 @@
+{
+  "Items": [
+    {
+      "Name": "Launch",
+      "ServerId": "00000000000000000000000000000009",
+      "Id": "00000000000000000000000000000002",
+      "SeriesName": "ORBIT",
+      "SeriesId": "00000000000000000000000000000003",
+      "SeasonName": "Season 1",
+      "IndexNumber": 1,
+      "ParentIndexNumber": 1,
+      "Type": "Episode",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 4,
+        "IsFavorite": false,
+        "LastPlayedDate": "2026-10-06T01:04:44.893243Z",
+        "Played": true,
+        "Key": "00000000-0000-0000-0000-000000000002",
+        "ItemId": "00000000000000000000000000000002"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "IsFolder": false
+    },
+    {
+      "Name": "First Frost",
+      "ServerId": "00000000000000000000000000000009",
+      "Id": "00000000000000000000000000000006",
+      "SeriesName": "Garden Folk",
+      "SeriesId": "00000000000000000000000000000004",
+      "SeasonName": "Season 1",
+      "IndexNumber": 1,
+      "ParentIndexNumber": 1,
+      "Type": "Episode",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 3,
+        "IsFavorite": false,
+        "LastPlayedDate": "2026-10-04T16:24:05.267686Z",
+        "Played": true,
+        "Key": "00000000-0000-0000-0000-000000000006",
+        "ItemId": "00000000000000000000000000000006"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "IsFolder": false
+    },
+    {
+      "Name": "Second Pass",
+      "ServerId": "00000000000000000000000000000009",
+      "Id": "00000000000000000000000000000008",
+      "SeriesName": "ORBIT",
+      "SeriesId": "00000000000000000000000000000003",
+      "SeasonName": "Season 1",
+      "IndexNumber": 2,
+      "ParentIndexNumber": 1,
+      "Type": "Episode",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 1,
+        "IsFavorite": false,
+        "LastPlayedDate": "2026-10-06T01:21:22.447607Z",
+        "Played": true,
+        "Key": "00000000-0000-0000-0000-000000000008",
+        "ItemId": "00000000000000000000000000000008"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "IsFolder": false
+    },
+    {
+      "Name": "The Old Well",
+      "ServerId": "00000000000000000000000000000009",
+      "Id": "00000000000000000000000000000001",
+      "SeriesName": "Garden Folk",
+      "SeriesId": "00000000000000000000000000000004",
+      "SeasonName": "Season 1",
+      "IndexNumber": 2,
+      "ParentIndexNumber": 1,
+      "Type": "Episode",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 1,
+        "IsFavorite": false,
+        "LastPlayedDate": "2026-10-04T21:29:27.149132Z",
+        "Played": true,
+        "Key": "00000000-0000-0000-0000-000000000001",
+        "ItemId": "00000000000000000000000000000001"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "IsFolder": false
+    },
+    {
+      "Name": "Odd Weather",
+      "ServerId": "00000000000000000000000000000009",
+      "Id": "00000000000000000000000000000007",
+      "SeriesName": "Garden Folk",
+      "SeriesId": "00000000000000000000000000000004",
+      "SeasonName": "Season 1",
+      "IndexNumber": 3,
+      "ParentIndexNumber": 1,
+      "Type": "Episode",
+      "UserData": {
+        "PlaybackPositionTicks": 0,
+        "PlayCount": 1,
+        "IsFavorite": false,
+        "LastPlayedDate": "2026-10-04T21:57:21.072986Z",
+        "Played": true,
+        "Key": "00000000-0000-0000-0000-000000000007",
+        "ItemId": "00000000000000000000000000000007"
+      },
+      "LocationType": "FileSystem",
+      "MediaType": "Video",
+      "IsFolder": false
+    }
+  ],
+  "TotalRecordCount": 5,
+  "StartIndex": 0
+}

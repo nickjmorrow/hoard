@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hoard Icon Ideas</title>
+<style>
+:root{
+  --bg:#f5f5f7; --card:#ffffff; --ink:#1d1d1f; --muted:#6e6e73; --line:#e3e3e8; --accent:#7B2FD6; --chip:#ececf1;
+  --wall:linear-gradient(160deg,#3b4a9e 0%,#6b4fb8 50%,#c0568f 100%);
+}
+:root[data-theme="dark"]{
+  --bg:#0f0f12; --card:#1b1b20; --ink:#f2f2f5; --muted:#9a9aa3; --line:#2b2b33; --accent:#C77DFF; --chip:#26262d;
+  --wall:linear-gradient(160deg,#1a1840 0%,#2a1b46 50%,#3a1630 100%);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar{max-width:1180px;margin:0 auto;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:19px;margin:0 auto 0 0;letter-spacing:-.01em}
+h1 span{color:var(--muted);font-weight:500}
+.seg{display:inline-flex;background:var(--chip);border-radius:10px;padding:3px}
+.seg button{border:0;background:none;color:var(--ink);font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15);font-weight:600}
+main{max-width:1180px;margin:0 auto;padding:22px 16px 60px}
+.lede{color:var(--muted);margin:0 0 20px;max-width:720px}
+.picks{margin:0 0 22px;padding:12px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:14px}
+.picks b{color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;position:relative}
+.card.fav{outline:2px solid var(--accent);outline-offset:-1px}
+.hero{display:flex;justify-content:center;padding:6px 0 2px}
+.hero img{width:176px;height:176px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.18))}
+.name{font-weight:650;font-size:16px;margin:0}
+.idea{color:var(--muted);margin:0;font-size:14px}
+.sizes{display:flex;gap:6px}
+.sw{flex:1;display:flex;align-items:center;justify-content:space-evenly;padding:10px 4px;border-radius:10px}
+.sw.l{background:#fff;border:1px solid #e6e6ea}.sw.d{background:#1c1c1e}
+.sw img:nth-child(1){width:48px}.sw img:nth-child(2){width:32px}.sw img:nth-child(3){width:16px}
+.fav-btn{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer;font-size:18px;line-height:1}
+.card.fav .fav-btn{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* home screen */
+.phone{margin:0 auto;width:min(390px,100%);aspect-ratio:390/760;border-radius:46px;background:var(--wall);padding:56px 22px;border:10px solid #111;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
+.apps{display:grid;grid-template-columns:repeat(4,1fr);gap:22px 14px}
+.app{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.app img{width:100%;max-width:64px;aspect-ratio:1;border-radius:14px}
+.app img.full{border-radius:0;transform:scale(1.085)}
+.app.ref span{opacity:.7}.app.ref img.full{transform:scale(1.25)}
+.note{color:var(--muted);font-size:13px;text-align:center;margin-top:14px}
+/* tv */
+.tv{margin:0 auto;max-width:1060px;border-radius:14px;padding:36px 30px 40px;background:linear-gradient(180deg,#2b2f3a,#111318);border:8px solid #050505}
+.tvrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px 22px}
+.tvapp{display:flex;flex-direction:column;align-items:center;gap:8px;color:#d8d8de;font-size:12px}
+.tvapp img{width:100%;border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.45);transition:transform .2s}
+.tvapp:hover img,.tvapp:focus-within img{transform:scale(1.12)}
+[hidden]{display:none!important}
+@media (max-width:520px){.hero img{width:140px;height:140px}}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <h1>Hoard icons <span>· jewels + ideas</span></h1>
+  <div class="seg" role="group" aria-label="View">
+    <button data-view="grid" aria-pressed="true">Ideas</button>
+    <button data-view="phone" aria-pressed="false">Home screen</button>
+    <button data-view="tv" aria-pressed="false">Apple TV</button>
+  </div>
+  <div class="seg" role="group" aria-label="Theme">
+    <button data-theme-btn="light" aria-pressed="true">Light</button>
+    <button data-theme-btn="dark" aria-pressed="false">Dark</button>
+  </div>
+</div></header>
+<main>
+  <section id="grid">
+    <p class="lede">Each idea is one object, Apple's flat style: squircle tile, one hue, a big white or gold shape. Tap the ☆ on the ones you like; your picks show below and I can read them.</p>
+    <div class="picks" id="picks">No picks yet.</div>
+    <div class="grid" id="cards"></div>
+  </section>
+  <section id="phone" hidden>
+    <div class="phone"><div class="apps" id="apps"></div></div>
+    <p class="note">Faded labels are Apple's own icons, for scale and family (local preview only).</p>
+  </section>
+  <section id="tv" hidden>
+    <div class="tv"><div class="tvrow" id="tvrow"></div></div>
+    <p class="note">Apple TV icons are landscape, so each idea is laid on a wide tile. Hover to focus.</p>
+  </section>
+</main>
+<script src="ideas.js"></script>
+<script>
+const IDEAS = window.IDEAS || [];
+const url = s => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+const store = { get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch{ return d; } },
+                set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} } };
+let favs = new Set(store.get('hoard-icon-favs', []));
+window.hoardPicks = () => [...favs];
+
+function renderCards(){
+  const el = document.getElementById('cards'); el.innerHTML='';
+  for(const i of IDEAS){
+    const u = url(i.svg);
+    const c = document.createElement('article');
+    c.className = 'card' + (favs.has(i.id)?' fav':'');
+    c.innerHTML = `<button class="fav-btn" aria-label="Pick ${i.name}" aria-pressed="${favs.has(i.id)}">${favs.has(i.id)?'★':'☆'}</button>
+      <div class="hero"><img src="${u}" alt="${i.name} icon"></div>
+      <div><p class="name">${i.name}</p><p class="idea">${i.idea}</p></div>
+      <div class="sizes"><div class="sw l"><img src="${u}" alt=""><img src="${u}" alt=""><img src="${u}" alt=""></div>
+      <div class="sw d"><img src="${u}" alt=""><img src="${u}" alt=""><img src="${u}" alt=""></div></div>`;
+    c.querySelector('.fav-btn').onclick = () => { favs.has(i.id)?favs.delete(i.id):favs.add(i.id); store.set('hoard-icon-favs',[...favs]); renderCards(); renderPicks(); };
+    el.appendChild(c);
+  }
+}
+function renderPicks(){
+  const p = document.getElementById('picks');
+  const names = IDEAS.filter(i=>favs.has(i.id)).map(i=>i.name);
+  p.innerHTML = names.length ? `Your picks: <b>${names.join(', ')}</b>` : 'No picks yet.';
+}
+function renderPhone(){
+  const refs = [['ref-tv.png','TV'],['ref-music.png','Music'],['ref-podcasts.png','Podcasts']];
+  const el = document.getElementById('apps'); el.innerHTML='';
+  const items = IDEAS.map(i=>`<div class="app"><img class="full" src="${url(i.svg)}" alt=""><span>${i.name}</span></div>`);
+  refs.forEach((r,k)=>items.splice(k*5+2,0,`<div class="app ref"><img class="full" src="${r[0]}" alt=""><span>${r[1]}</span></div>`));
+  el.innerHTML = items.join('');
+}
+function renderTV(){
+  document.getElementById('tvrow').innerHTML = IDEAS.map(i=>`<div class="tvapp" tabindex="0"><img src="${url(i.tv)}" alt="${i.name}"><span>${i.name}</span></div>`).join('');
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed', x===b));
+  for(const id of ['grid','phone','tv']) document.getElementById(id).hidden = id!==b.dataset.view;
+  store.set('hoard-icon-view', b.dataset.view);
+});
+function setTheme(t){ document.documentElement.dataset.theme=t; document.querySelectorAll('[data-theme-btn]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.themeBtn===t)); store.set('hoard-icon-theme',t); }
+document.querySelectorAll('[data-theme-btn]').forEach(b=>b.onclick=()=>setTheme(b.dataset.themeBtn));
+setTheme(store.get('hoard-icon-theme','light'));
+renderCards(); renderPicks(); renderPhone(); renderTV();
+const v = store.get('hoard-icon-view','grid'); document.querySelector(`[data-view="${v}"]`)?.click();
+</script>
+</body>
+</html>

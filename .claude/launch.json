@@ -1,0 +1,8 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "hoard-fake", "runtimeExecutable": "pnpm", "runtimeArgs": ["exec", "vite", "--port", "5183", "--strictPort"], "env": { "VITE_FAKE_API": "1" }, "port": 5183 },
+    { "name": "hoard-throwaway-api", "runtimeExecutable": "node", "runtimeArgs": ["e2e/serve.ts"], "env": { "PORT": "8781" }, "port": 8781 },
+    { "name": "hoard-throwaway", "runtimeExecutable": "pnpm", "runtimeArgs": ["exec", "vite", "--port", "5184", "--strictPort"], "port": 5184 }
+  ]
+}

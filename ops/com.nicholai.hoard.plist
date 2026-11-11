@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ops/deploy.sh swaps the home-folder placeholder for the server user's home and installs this in ~/Library/LaunchAgents. No secrets here: run.sh loads them at runtime. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.nicholai.hoard</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__HOME__/Projects/hoard/ops/run.sh</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>StandardOutPath</key>
+	<string>__HOME__/Library/Logs/hoard.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/hoard.log</string>
+</dict>
+</plist>
