@@ -1,5 +1,6 @@
 {
   "name": "hoard",
+  "description": "Self-hosted movies, TV and games tracker: Node server with a SQLite store, React web app, OMDb and Jellyfin integration.",
   "private": true,
   "type": "module",
   "scripts": {
