@@ -1,3 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240"><g transform="translate(200 120) scale(0.95) translate(-128 -137)">
-<g opacity=".5"><path d="M90 66H166L208 112L128 208L48 112Z" fill="#fff" stroke="#fff" stroke-width="12" stroke-linejoin="round"/></g>
-<path d="M108 66H148L168 112L128 208L88 112Z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240"><g transform="translate(88 8) scale(1.8666666666666667)"><g fill="none" stroke="#e8dcc0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+ <path d="M47 47 H73 L82 58 L60 87 L38 58 Z" fill="#0f2321"/>
+ <path d="M38 58 H82"/>
+ <path d="M47 47 L52 58 L60 47 L68 58 L73 47 M52 58 L60 87 L68 58" stroke-width="1.1"/>
+</g>
+<path d="M53.6 56.6 L60 48.2 L66.4 56.6 Z" fill="#cf6f45"/></g></svg>
