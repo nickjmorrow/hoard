@@ -104,4 +104,40 @@ describe('suggestions', () => {
     expect((await (await send('GET', '/api/suggestions')).json()).suggestions.map((s: { name: string }) => s.name)).toEqual(['Far Field'])
     expect((await send('POST', '/api/suggestions/nope/restore', {})).status).toBe(404)
   })
+
+  test('ask: a question in plain words gets owned titles that answer it and new ones, from the whole library', async () => {
+    const { library, send, prompts } = setup([
+      { name: 'Far Field', year: 2022, type: 'movie', why: 'Snowbound and slow.' },
+      { name: 'Cold Harbor', year: 2015, type: 'movie', why: 'Set in a frozen town.', have: true },
+    ])
+    await library.createTitle({ name: 'Cold Harbor', year: 2015, type: 'movie', fields: { status: 'want' }, tags: ['Winter'] })
+
+    const made = await (await send('POST', '/api/suggest', { ask: 'cozy winter horror' })).json()
+    expect(made.suggestions.map((s: { name: string; source: string }) => [s.name, s.source])).toEqual([['Far Field', 'cozy winter horror']])
+    expect(made.owned).toHaveLength(1)
+    expect(made.owned[0].why).toBe('Set in a frozen town.')
+    expect(prompts[0]).toContain('They asked: "cozy winter horror"')
+    expect(prompts[0]).toContain('Cold Harbor (2015); movie; tags: Winter')
+  })
+
+  test('For You goes from recent liked titles and only offers owned titles not watched yet', async () => {
+    const { library, send, prompts } = setup([
+      { name: 'Far Field', year: 2022, type: 'movie', why: 'Like your recent favorites.' },
+      { name: 'Seen Before', year: 2010, type: 'movie', why: 'x', have: true },
+      { name: 'Up Next', year: 2012, type: 'movie', why: 'Waiting on your list.', have: true },
+    ])
+    await library.createTitle({ name: 'Loved Lately', year: 2020, type: 'movie', fields: { status: 'done', rating: '5', finished: '2026-11-01' }, tags: [] })
+    await library.createTitle({ name: 'Seen Before', year: 2010, type: 'movie', fields: { status: 'done', rating: '3' }, tags: [] })
+    await library.createTitle({ name: 'Up Next', year: 2012, type: 'movie', fields: { status: 'want' }, tags: [] })
+
+    const made = await (await send('POST', '/api/suggest', { forYou: true, count: 25 })).json()
+    expect(made.suggestions[0]).toMatchObject({ name: 'Far Field', source: 'For you' })
+    expect(made.owned.map((o: { why: string }) => o.why)).toEqual(['Waiting on your list.'])
+    expect(prompts[0]).toContain('Loved Lately (2020); movie; watched, rated 5/5')
+  })
+
+  test('For You with nothing rated yet says so', async () => {
+    const { send } = setup()
+    expect((await send('POST', '/api/suggest', { forYou: true })).status).toBe(400)
+  })
 })

@@ -11,7 +11,7 @@ import { NotANoteError, NotFoundError } from './model.ts'
 import { LookupUnavailableError } from './lookupError.ts'
 import type { Availability, Lookup } from './ports.ts'
 import type { Store } from './store.ts'
-import { runSuggest, SuggestError, type Suggester } from './suggest.ts'
+import { FOR_YOU, recentLikes, runSuggest, SuggestError, type Suggester } from './suggest.ts'
 
 /** What the API needs from the library; the real class satisfies it and tests pass an in-memory fake. */
 export type LibraryPort = Pick<Library,
@@ -294,7 +294,17 @@ export function createApp(deps: AppDeps): Hono {
     let seeds: Title[]
     let source: string
     let tag: string | undefined
-    if (typeof body.tag === 'string' && body.tag.trim()) {
+    let mode: 'seeds' | 'ask' | 'forYou' = 'seeds'
+    if (typeof body.ask === 'string' && body.ask.trim()) {
+      mode = 'ask'
+      source = body.ask.trim().replace(/\s+/g, ' ').slice(0, 300)
+      seeds = []
+    } else if (body.forYou === true) {
+      mode = 'forYou'
+      source = FOR_YOU
+      seeds = recentLikes(all)
+      if (!seeds.length) throw new BadRequest('rate a few watched titles first, so there is something to go on')
+    } else if (typeof body.tag === 'string' && body.tag.trim()) {
       tag = tagName(body.tag)
       const key = tag.toLowerCase()
       seeds = all.filter((t) => t.tags.some((x) => x.toLowerCase() === key))
@@ -313,10 +323,10 @@ export function createApp(deps: AppDeps): Hono {
       seeds = all.filter((t) => ids.has(t.pageId))
       source = seeds.map((t) => t.name).slice(0, 3).join(', ')
     } else {
-      throw new BadRequest('say what to suggest from: tag, person, genre or pageIds')
+      throw new BadRequest('say what to suggest from: ask, forYou, tag, person, genre or pageIds')
     }
-    if (!seeds.length) throw new BadRequest(`nothing in ${source || 'that selection'} to go on`)
-    const made = await runSuggest({ source, seeds, ...(tag ? { tag } : {}), ...(prompt ? { prompt } : {}), ...(type ? { type } : {}), count },
+    if (mode === 'seeds' && !seeds.length) throw new BadRequest(`nothing in ${source || 'that selection'} to go on`)
+    const made = await runSuggest({ mode, source, seeds, ...(tag ? { tag } : {}), ...(prompt ? { prompt } : {}), ...(type ? { type } : {}), count },
       { suggester, lookup, store, library: all })
     return c.json(made)
   })

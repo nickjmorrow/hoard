@@ -18,8 +18,20 @@ export interface RawSuggestion { name: string; year?: number; type: MediaType; w
 /** A title already in the library that Claude says fits with the seeds, and why. */
 export interface OwnedPick { pageId: string; why: string }
 
-/** How many owned titles to ask for alongside the new ones. */
+/** How many owned titles to ask for alongside the new ones (an ask or For You gets more). */
 export const OWNED_PICKS = 8
+export const OWNED_PICKS_WIDE = 12
+
+/** The label For You runs carry, in the inbox and on the run. */
+export const FOR_YOU = 'For you'
+
+/** For You's seeds: what they finished recently and liked, newest first. */
+export function recentLikes(library: Title[], max = 15): Title[] {
+  const liked = library
+    .filter((t) => t.type !== 'game' && t.status === 'done' && (t.rating ?? 0) >= 4)
+    .sort((a, b) => (b.finished ?? '').localeCompare(a.finished ?? ''))
+  return liked.slice(0, max)
+}
 
 /** Turns a prompt into suggestions. The real one runs Claude; tests pass a fake. */
 export interface Suggester {
@@ -29,7 +41,12 @@ export interface Suggester {
 export class SuggestError extends Error {}
 
 export interface SuggestRequest {
-  /** What the seeds are, for the inbox and the prompt: a tag name, a person, or titles listed. */
+  /**
+   * seeds: more like a tag, person or pick (the default). ask: a question in their own words, answered from
+   * the whole library. forYou: a fresh batch from what they watched and liked lately.
+   */
+  mode?: 'seeds' | 'ask' | 'forYou'
+  /** What the seeds are, for the inbox and the prompt: a tag name, a person, titles listed, or the question. */
   source: string
   seeds: Title[]
   /** The tag kept suggestions get. */
@@ -58,15 +75,60 @@ export function viewerName(env: Record<string, string | undefined> = process.env
   return env.HOARD_USER_NAME?.trim() || 'someone'
 }
 
+/** One library line for an ask or For You: enough for Claude to pick owned titles by mood. */
+function libraryLine(t: Title): string {
+  const bits = [`${t.name}${t.year ? ` (${t.year})` : ''}`, t.type === 'show' ? 'show' : 'movie']
+  if (t.tags.length) bits.push(`tags: ${t.tags.join(', ')}`)
+  if (t.genre?.length) bits.push(t.genre.join('/'))
+  if (t.status === 'done') bits.push(t.rating ? `watched, ${t.rating}/5` : 'watched')
+  else if (t.status === 'dropped') bits.push('gave up')
+  else if (t.status === 'doing') bits.push('watching now')
+  else bits.push('not watched yet')
+  return `- ${bits.join('; ')}`
+}
+
+const label = (x: { name: string; year?: number }) => `${x.name}${x.year ? ` (${x.year})` : ''}`
+const tidy = (lines: string[]) => lines.filter((line, i, all) => line !== '' || all[i - 1] !== '').join('\n')
+const replyFormat = [
+  'Reply with only a JSON array, no prose and no code fence:',
+  '[{"name": "Title", "year": 2019, "type": "movie" or "show", "why": "One sentence.", "have": false}]',
+]
+
+/** An ask or For You: the whole library as context, then the question (or their recent likes). */
+function buildWidePrompt(req: SuggestRequest, library: Title[], passed: Suggestion[], who: string): string {
+  const kind = req.type === 'show' ? 'TV shows' : req.type === 'movie' ? 'movies' : 'movies or TV shows'
+  const shelf = library.filter((t) => t.type !== 'game')
+  const ask = req.mode === 'ask'
+  return tidy([
+    `You recommend ${kind} to ${who}, who keeps a careful list of what they watch. Their whole library, with their tags and ratings:`,
+    ...shelf.map(libraryLine),
+    '',
+    ask
+      ? `They asked: "${req.source}"${req.prompt?.trim() ? `, and added: ${req.prompt.trim()}` : ''}`
+      : 'They want a fresh batch based on their taste, above all what they watched and liked lately:',
+    ...(ask ? [] : req.seeds.map(describe)),
+    !ask && req.prompt?.trim() ? `What they asked for: ${req.prompt.trim()}` : '',
+    '',
+    ask
+      ? `First pick up to ${OWNED_PICKS_WIDE} titles from their library that answer it best, best first. Mark those with "have": true.`
+      : `First pick up to ${OWNED_PICKS_WIDE} titles from their library they haven't watched yet that they'd likely enjoy most right now. Mark those with "have": true.`,
+    `Then suggest ${req.count} ${kind} they don't have${ask ? ' that answer it' : ' that fit their recent taste'}. Real, released titles only. Mix the well known with the overlooked.`,
+    'For each, one sentence of why, tied to their titles or their words. No spoilers.',
+    passed.length ? `They turned these down; never suggest them: ${passed.map(label).join('; ')}` : '',
+    '',
+    ...replyFormat,
+  ])
+}
+
 /** The whole prompt: the seeds, the viewer's taste, what to avoid, and the reply format. */
 export function buildPrompt(req: SuggestRequest, library: Title[], passed: Suggestion[], who = viewerName()): string {
+  if (req.mode === 'ask' || req.mode === 'forYou') return buildWidePrompt(req, library, passed, who)
   const kind = req.type === 'show' ? 'TV shows' : req.type === 'movie' ? 'movies' : 'movies or TV shows'
   const favorites = library
     .filter((t) => t.status === 'done' && (t.rating ?? 0) >= 5 && t.type !== 'game' && !req.seeds.includes(t))
     .slice(0, 25)
-  const label = (x: { name: string; year?: number }) => `${x.name}${x.year ? ` (${x.year})` : ''}`
   const owned = library.filter((t) => t.type !== 'game').map(label)
-  return [
+  return tidy([
     `You recommend ${kind} to ${who}, who keeps a careful list of what they watch.`,
     '',
     `They grouped these as "${req.source}". Watched titles with high ratings matter most; unwatched ones show what they're drawn to; low ratings and dropped titles show what to steer away from.`,
@@ -86,9 +148,8 @@ export function buildPrompt(req: SuggestRequest, library: Title[], passed: Sugge
     '',
     `Also pick up to ${OWNED_PICKS} titles from the list they already have (other than the ones they grouped) that belong with "${req.source}", so they see what they own that fits. Mark those with "have": true and give the same one sentence of why.`,
     '',
-    'Reply with only a JSON array, no prose and no code fence:',
-    '[{"name": "Title", "year": 2019, "type": "movie" or "show", "why": "One sentence.", "have": false}]',
-  ].filter((line, i, all) => line !== '' || all[i - 1] !== '').join('\n')
+    ...replyFormat,
+  ])
 }
 
 /** The JSON array in Claude's reply, tolerating a code fence or a sentence around it. */
@@ -177,7 +238,7 @@ export async function verifySuggestions(
 }
 
 /** The owned titles Claude picked, matched to the library by name (and year when given); never a seed, never twice. */
-export function matchOwned(raw: RawSuggestion[], library: Title[], seeds: Title[]): OwnedPick[] {
+export function matchOwned(raw: RawSuggestion[], library: Title[], seeds: Title[], max = OWNED_PICKS): OwnedPick[] {
   const seedIds = new Set(seeds.map((t) => t.pageId))
   const out: OwnedPick[] = []
   for (const r of raw) {
@@ -187,7 +248,7 @@ export function matchOwned(raw: RawSuggestion[], library: Title[], seeds: Title[
     if (!t || seedIds.has(t.pageId) || out.some((o) => o.pageId === t.pageId)) continue
     out.push({ pageId: t.pageId, why: r.why })
   }
-  return out.slice(0, OWNED_PICKS)
+  return out.slice(0, max)
 }
 
 /** The full round trip: prompt, Claude, OMDb, the store. Returns the new suggestions and the owned titles that fit. */
@@ -201,7 +262,11 @@ export async function runSuggest(
   const verified = await verifySuggestions(raw.filter((r) => !r.have), deps.lookup, deps.library, earlier)
   for (const s of verified) if (s.poster && s.imdb) deps.store.setPoster(s.imdb, s.poster)
   const suggestions = deps.store.addSuggestions(verified.map((s) => ({ ...s, source: req.source, ...(req.tag ? { tag: req.tag } : {}) })))
-  return { suggestions, owned: matchOwned(raw.filter((r) => r.have), deps.library, req.seeds) }
+  const wide = req.mode === 'ask' || req.mode === 'forYou'
+  // For You's owned picks are what to watch next, so only titles not watched yet.
+  const pickable = req.mode === 'forYou' ? deps.library.filter((t) => t.status === 'want' || t.status === 'doing') : deps.library
+  const owned = matchOwned(raw.filter((r) => r.have), pickable, req.mode === 'ask' ? [] : req.seeds, wide ? OWNED_PICKS_WIDE : OWNED_PICKS)
+  return { suggestions, owned }
 }
 
 /** $CLAUDE_BIN, else the copy the Claude app keeps current (newest), else Homebrew's. */
