@@ -8,7 +8,7 @@ import { startBackups } from './backup.ts'
 import { Enricher } from './enricher.ts'
 import { Library } from './library.ts'
 import { Store } from './store.ts'
-import { ClaudeSuggester } from './suggest.ts'
+import { checkUnverified, ClaudeSuggester } from './suggest.ts'
 import { createJellyfin } from './jellyfin.ts'
 import { createLookup } from './lookup.ts'
 import { startWatchedLoop } from './watched.ts'
@@ -34,6 +34,10 @@ const tagger = new AutoTagger(library, new ClaudeTagPicker())
 
 // The watched loop is also what refreshes Jellyfin, so the app's onEdgar answers come from it.
 enricher.start()
+// Suggestions saved while OMDb was out get their details (RT, poster) once it's back.
+const checkSuggestions = () => void checkUnverified(store, lookup).catch((e) => console.error('checking suggestions:', e))
+checkSuggestions()
+setInterval(checkSuggestions, 30 * 60_000)
 startWatchedLoop(library, jellyfin)
 
 const app = createApp({

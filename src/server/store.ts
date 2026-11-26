@@ -283,6 +283,12 @@ export class Store {
     return row ? toSuggestion(row) : null
   }
 
+  /** Replaces a suggestion's details (name, imdb, fields, poster…), keeping its id, state and date. */
+  updateSuggestion(s: Suggestion): void {
+    const { id, state: _state, createdAt: _createdAt, ...doc } = s
+    this.db.prepare('update suggestions set doc = ? where id = ?').run(JSON.stringify(doc), id)
+  }
+
   setSuggestionState(id: string, state: SuggestionState): void {
     this.db.prepare('update suggestions set state = ? where id = ?').run(state, id)
   }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Title } from '../shared/title.ts'
 import type { Lookup } from './ports.ts'
 import { Store } from './store.ts'
-import { buildPrompt, parseSuggestions, runSuggest, SuggestError, viewerName, type Suggester } from './suggest.ts'
+import { buildPrompt, checkUnverified, parseSuggestions, runSuggest, SuggestError, viewerName, type Suggester } from './suggest.ts'
 
 function title(t: Partial<Title> & { name: string }): Title {
   return { pageId: t.name, pageTitle: t.name, type: 'movie', status: 'want', tags: [], notesText: '', updatedAt: 0, createdAt: 0, ...t }
@@ -128,5 +128,21 @@ describe('parseSuggestions', () => {
       { name: 'Mirror House', year: 2019, type: 'movie', why: 'Halloway.', have: true },
       { name: 'Far Field', type: 'movie', why: 'New.' },
     ])
+  })
+})
+
+describe('checkUnverified', () => {
+  it('fills in an unchecked suggestion once OMDb is back, and leaves checked ones alone', async () => {
+    const store = new Store(':memory:')
+    const [unchecked] = store.addSuggestions([{ name: 'far field', year: 2022, type: 'movie', why: 'x', source: 'For you', fields: { year: '2022' } }])
+    store.addSuggestions([{ name: 'Known', type: 'movie', imdb: 'tt1', why: 'y', source: 'For you', fields: { imdb: 'tt1' } }])
+    let searches = 0
+    const back: Lookup = {
+      search: async () => { searches++; return [{ source: 'omdb', id: 'tt9', name: 'Far Field', year: 2022, detail: '' }] },
+      details: async () => ({ imdb: 'tt9', rt: '91', runtime: '101', poster: 'https://img/tt9.jpg' }),
+    }
+    expect(await checkUnverified(store, back)).toBe(1)
+    expect(searches).toBe(1)
+    expect(store.suggestion(unchecked!.id)).toMatchObject({ name: 'Far Field', imdb: 'tt9', poster: 'https://img/tt9.jpg', state: 'new', fields: { rt: '91', runtime: '101', imdb: 'tt9' } })
   })
 })

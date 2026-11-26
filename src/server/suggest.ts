@@ -237,6 +237,38 @@ export async function verifySuggestions(
   return out
 }
 
+/**
+ * Suggestions saved unchecked while OMDb was out get their details (RT, runtime, poster) once it's back:
+ * up to `max` per pass, stopping when OMDb is out again. One OMDb can't find stays as it was.
+ */
+export async function checkUnverified(store: Store, lookup: Lookup, max = 20): Promise<number> {
+  let done = 0
+  for (const s of store.suggestions('new').filter((x) => !x.imdb).slice(0, max)) {
+    try {
+      const want = normalizeName(s.name)
+      const hits = (await lookup.search(s.type, s.name))
+        .filter((r) => normalizeName(r.name) === want && (s.year === undefined || (r.year !== undefined && Math.abs(r.year - s.year) <= 1)))
+      const hit = hits[0]
+      if (!hit) continue
+      const { poster, ...fields } = await lookup.details(s.type, hit.id)
+      if (poster) store.setPoster(hit.id, poster)
+      store.updateSuggestion({
+        ...s,
+        name: hit.name,
+        imdb: hit.id,
+        fields: { ...s.fields, imdb: hit.id, ...(fields as Partial<Record<FieldKey, string>>) },
+        ...(hit.year ? { year: hit.year } : {}),
+        ...(poster ? { poster } : {}),
+      })
+      done++
+    } catch (e) {
+      if (e instanceof LookupUnavailableError) break
+      throw e
+    }
+  }
+  return done
+}
+
 /** The owned titles Claude picked, matched to the library by name (and year when given); never a seed, never twice. */
 export function matchOwned(raw: RawSuggestion[], library: Title[], seeds: Title[], max = OWNED_PICKS): OwnedPick[] {
   const seedIds = new Set(seeds.map((t) => t.pageId))
