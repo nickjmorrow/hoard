@@ -11,6 +11,7 @@ import { Store } from './store.ts'
 import { checkUnverified, ClaudeSuggester } from './suggest.ts'
 import { createJellyfin } from './jellyfin.ts'
 import { createLookup } from './lookup.ts'
+import { createRtSource, RtFiller, WithRt } from './mdblist.ts'
 import { startWatchedLoop } from './watched.ts'
 
 function config(): { port: number; dataDir: string } {
@@ -26,7 +27,9 @@ const { port, dataDir } = config()
 const store = new Store(`${dataDir}/hoard.db`)
 const library = new Library(store)
 startBackups(store, `${dataDir}/backups`)
-const lookup = createLookup() // OMDB_API_KEY; without it, movies and shows are skipped
+const rtSource = createRtSource() // MDBLIST_API_KEY; without it, titles OMDb has no RT for have none
+// OMDB_API_KEY; without it, movies and shows are skipped. RT comes from MDBList when OMDb has none.
+const lookup = rtSource ? new WithRt(createLookup(), rtSource) : createLookup()
 const jellyfin = createJellyfin() // JELLYFIN_URL, JELLYFIN_API_KEY; without them, onEdgar is unknown
 const enricher = new Enricher(library, lookup)
 enricher.onPoster = (imdb, url) => store.setPoster(imdb, url)
@@ -38,6 +41,13 @@ enricher.start()
 const checkSuggestions = () => void checkUnverified(store, lookup).catch((e) => console.error('checking suggestions:', e))
 checkSuggestions()
 setInterval(checkSuggestions, 30 * 60_000)
+// RT for titles and suggestions looked up after OMDb dropped Rotten Tomatoes.
+if (rtSource) {
+  const rtFiller = new RtFiller(library, store, rtSource)
+  const fillRt = () => void rtFiller.runOnce().then((n) => n && console.log(`rt: filled ${n}`)).catch((e) => console.error('rt:', e))
+  setTimeout(fillRt, 60_000)
+  setInterval(fillRt, 60 * 60_000)
+}
 startWatchedLoop(library, jellyfin)
 
 const app = createApp({

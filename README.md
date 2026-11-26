@@ -49,6 +49,7 @@ Configuration (see [.env.example](.env.example) for the full list):
 | `PORT` | server | Port on 127.0.0.1 (default 8781) |
 | `HOARD_DATA` | server, scripts | Folder for the SQLite store and backups (default `~/Library/Application Support/Hoard`) |
 | `OMDB_API_KEY` | server | Enables details and posters for movies and shows |
+| `MDBLIST_API_KEY` | server | Rotten Tomatoes scores (OMDb no longer has them); `ops/run.sh` reads it from `~/.mdblist_key` |
 | `JELLYFIN_URL`, `JELLYFIN_API_KEY` | server | Enables "on the server" and auto-marking played titles |
 | `HOARD_USER_NAME`, `HOARD_CLAUDE_MODEL`, `CLAUDE_BIN` | server | Suggestions: who they're for, which model, which `claude` binary |
 | `VITE_SERVER_NAME` | client build | What the UI calls the server (default "the server") |
