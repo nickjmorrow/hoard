@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { FieldKey, MediaType, Title } from '../shared/title.ts'
@@ -360,6 +360,33 @@ test('serves the built client, falling back to index.html for app routes', async
     expect(page.headers.get('content-type')).toMatch(/text\/html/)
     expect(await page.text()).toBe('<div id="root"></div>')
     expect((await app.request('/api/nope')).status).toBe(404)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('answers are gzipped for a client that accepts it, and plain for one that does not', async () => {
+  const { library, send, app } = setup()
+  for (let i = 0; i < 40; i++) library.add({ pageTitle: `Starfall ${i} (2021)`, type: 'movie' })
+  const zipped = await app.request('/api/library', { headers: { 'accept-encoding': 'gzip' } })
+  expect(zipped.headers.get('content-encoding')).toBe('gzip')
+  const plain = await send('GET', '/api/library')
+  expect(plain.headers.get('content-encoding')).toBeNull()
+  const unzipped = await new Response(zipped.body!.pipeThrough(new DecompressionStream('gzip'))).json()
+  expect(unzipped).toEqual(await plain.json())
+})
+
+test('hashed assets are cached for good; the page itself is always re-checked', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hoard-client-'))
+  try {
+    mkdirSync(join(dir, 'assets'))
+    writeFileSync(join(dir, 'index.html'), '<div id="root"></div>')
+    writeFileSync(join(dir, 'assets', 'index-abc123.js'), 'console.log(1)')
+    const app = createApp({ library: new FakeLibrary(), availability: { isUp: () => false, onEdgar: () => null, jellyfinId: () => null },
+      lookup: { search: async () => [], details: async () => ({}) }, clientDir: dir })
+    expect((await app.request('/assets/index-abc123.js')).headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    expect((await app.request('/')).headers.get('cache-control')).toBe('no-cache')
+    expect((await app.request('/title/p1')).headers.get('cache-control')).toBe('no-cache')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

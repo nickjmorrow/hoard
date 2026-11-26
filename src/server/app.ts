@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono, type Context } from 'hono'
+import { compress } from 'hono/compress'
 import { localDate } from '../shared/localDate.ts'
 import { MEDIA_TAG, MEDIA_TYPES, STATUSES, type FieldKey, type MediaType, type Title } from '../shared/title.ts'
 import type { Library } from './library.ts'
@@ -132,6 +133,9 @@ export function createApp(deps: AppDeps): Hono {
   const { library, availability, lookup } = deps
   const now = deps.now ?? Date.now
   const app = new Hono()
+
+  // The library is a few hundred KB of JSON and the client bundle about the same; both shrink to about a third.
+  app.use(compress())
 
   const onEdgar = (title: Title, up = availability.isUp()) =>
     up && title.imdb ? availability.onEdgar(title.imdb) : null
@@ -373,6 +377,14 @@ export function createApp(deps: AppDeps): Hono {
 
   const clientDir = deps.clientDir ?? fileURLToPath(new URL('../../dist/client', import.meta.url))
   if (existsSync(clientDir)) {
+    // Vite names everything in assets/ by its content, so a browser can keep those for good; the page
+    // that points at them is re-checked each visit.
+    app.get('*', async (c, next) => {
+      await next()
+      if (!c.res.ok) return
+      if (c.req.path.startsWith('/assets/')) c.header('Cache-Control', 'public, max-age=31536000, immutable')
+      else if (c.res.headers.get('content-type')?.startsWith('text/html')) c.header('Cache-Control', 'no-cache')
+    })
     app.get('*', serveStatic({ root: clientDir }))
     app.get('*', serveStatic({ path: `${clientDir}/index.html` }))
   }
