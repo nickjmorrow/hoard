@@ -58,5 +58,8 @@ describe('RtFiller', () => {
     asked.length = 0
     expect(await filler.runOnce()).toBe(0)
     expect(asked).toEqual([])
+    // A restart (a new filler on the same store) remembers which ones had no score.
+    expect(await new RtFiller(library, store, { rt: async (_type, id) => { asked.push(id); return scores[id] } }).runOnce()).toBe(0)
+    expect(asked).toEqual([])
   })
 })

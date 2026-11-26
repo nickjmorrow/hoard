@@ -1,3 +1,4 @@
+import { LookupUnavailableError } from './lookupError.ts'
 import { describe, expect, it } from 'vitest'
 import type { Title } from '../shared/title.ts'
 import type { Lookup } from './ports.ts'
@@ -135,7 +136,7 @@ describe('checkUnverified', () => {
   it('fills in an unchecked suggestion once OMDb is back, and leaves checked ones alone', async () => {
     const store = new Store(':memory:')
     const [unchecked] = store.addSuggestions([{ name: 'far field', year: 2022, type: 'movie', why: 'x', source: 'For you', fields: { year: '2022' } }])
-    store.addSuggestions([{ name: 'Known', type: 'movie', imdb: 'tt1', why: 'y', source: 'For you', fields: { imdb: 'tt1' } }])
+    store.addSuggestions([{ name: 'Known', type: 'movie', imdb: 'tt1', why: 'y', source: 'For you', fields: { imdb: 'tt1' }, poster: 'https://img/tt1.jpg' }])
     let searches = 0
     const back: Lookup = {
       search: async () => { searches++; return [{ source: 'omdb', id: 'tt9', name: 'Far Field', year: 2022, detail: '' }] },
@@ -144,5 +145,57 @@ describe('checkUnverified', () => {
     expect(await checkUnverified(store, back)).toBe(1)
     expect(searches).toBe(1)
     expect(store.suggestion(unchecked!.id)).toMatchObject({ name: 'Far Field', imdb: 'tt9', poster: 'https://img/tt9.jpg', state: 'new', fields: { rt: '91', runtime: '101', imdb: 'tt9' } })
+  })
+
+  it("doesn't search again for a day for one OMDb can't find", async () => {
+    let clock = 1_000_000
+    const store = new Store(':memory:')
+    const [lost] = store.addSuggestions([{ name: 'Nowhere Film', type: 'movie', why: 'x', source: 'For you', fields: {} }])
+    let searches = 0
+    const empty: Lookup = { search: async () => { searches++; return [] }, details: async () => ({}) }
+    const now = () => clock
+    expect(await checkUnverified(store, empty, { now })).toBe(0)
+    expect(await checkUnverified(store, empty, { now })).toBe(0)
+    expect(searches).toBe(1)
+    expect(store.suggestion(lost!.id)?.state).toBe('new')
+    clock += 25 * 3600_000
+    await checkUnverified(store, empty, { now })
+    expect(searches).toBe(2)
+  })
+
+  it('gets the details for one matched while the details call failed, without searching', async () => {
+    const store = new Store(':memory:')
+    const [half] = store.addSuggestions([{ name: 'Far Field', type: 'movie', imdb: 'tt9', why: 'x', source: 'For you', fields: { imdb: 'tt9' } }])
+    let searches = 0
+    const back: Lookup = {
+      search: async () => { searches++; return [] },
+      details: async (_type, id) => ({ imdb: id, runtime: '101', poster: `https://img/${id}.jpg` }),
+    }
+    expect(await checkUnverified(store, back)).toBe(1)
+    expect(searches).toBe(0)
+    expect(store.suggestion(half!.id)).toMatchObject({ imdb: 'tt9', poster: 'https://img/tt9.jpg', fields: { runtime: '101' } })
+  })
+
+  it('passes on one that turns out to be a title already in the library', async () => {
+    const store = new Store(':memory:')
+    const [dupe] = store.addSuggestions([{ name: 'The Long Table', type: 'movie', why: 'x', source: 'For you', fields: {} }])
+    const found: Lookup = {
+      search: async () => [{ source: 'omdb', id: 'tt5', name: 'The Long Table', year: 2017, detail: '' }],
+      details: async () => ({ imdb: 'tt5' }),
+    }
+    await checkUnverified(store, found, { owned: [title({ name: 'The Long Table', year: 2017, imdb: 'tt5' })] })
+    expect(store.suggestion(dupe!.id)?.state).toBe('passed')
+  })
+
+  it('stops when OMDb is out again', async () => {
+    const store = new Store(':memory:')
+    store.addSuggestions([
+      { name: 'One', type: 'movie', why: 'x', source: 'For you', fields: {} },
+      { name: 'Two', type: 'movie', why: 'x', source: 'For you', fields: {} },
+    ])
+    let searches = 0
+    const down: Lookup = { search: async () => { searches++; throw new LookupUnavailableError('out') }, details: async () => ({}) }
+    expect(await checkUnverified(store, down)).toBe(0)
+    expect(searches).toBe(1)
   })
 })

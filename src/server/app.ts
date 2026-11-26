@@ -289,7 +289,7 @@ export function createApp(deps: AppDeps): Hono {
     if (type === 'game') throw new BadRequest('suggestions are for movies and shows')
     const count = body.count === undefined ? 10 : Number(body.count)
     if (!Number.isInteger(count) || count < 1 || count > 25) throw new BadRequest('count must be a whole number from 1 to 25')
-    const prompt = typeof body.prompt === 'string' ? body.prompt : undefined
+    const prompt = typeof body.prompt === 'string' ? body.prompt.slice(0, 300) : undefined
 
     let seeds: Title[]
     let source: string
@@ -340,6 +340,8 @@ export function createApp(deps: AppDeps): Hono {
     const { store } = suggestDeps()
     const s = store.suggestion(c.req.param('id'))
     if (!s) return notFound(c)
+    // A second tap or a retried request mustn't add the title (and start its lookups) twice.
+    if (s.state !== 'new') return c.json({ error: s.state === 'kept' ? 'already added' : 'already passed on' }, 409)
     const title = await library.createTitle({
       name: s.name,
       ...(s.year ? { year: s.year } : {}),

@@ -102,7 +102,6 @@ export class RtFiller {
   private store: Store
   private source: RtSource
   private now: () => number
-  private noScore = new Map<string, number>()
 
   constructor(library: RtLibrary, store: Store, source: RtSource, now: () => number = Date.now) {
     this.library = library
@@ -112,7 +111,8 @@ export class RtFiller {
   }
 
   private due(imdb: string): boolean {
-    const at = this.noScore.get(imdb.toLowerCase())
+    // Kept in the store, so a restart (every deploy) doesn't ask again about every title with no score.
+    const at = this.store.rtMissAt(imdb)
     return at === undefined || this.now() - at > 7 * 24 * 3600_000
   }
 
@@ -122,7 +122,7 @@ export class RtFiller {
     const ask = async (type: MediaType, imdb: string): Promise<number | undefined> => {
       asked++
       const rt = await this.source.rt(type, imdb)
-      if (rt === undefined) this.noScore.set(imdb.toLowerCase(), this.now())
+      if (rt === undefined) this.store.setRtMiss(imdb, this.now())
       return rt
     }
     try {

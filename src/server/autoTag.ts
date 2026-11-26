@@ -72,6 +72,8 @@ export class AutoTagger {
   private library: AutoTagLibrary
   private picker: TagPicker
   private retryAfterMs: number
+  /** Tagging runs one title at a time, so adding many titles at once doesn't start many Claude processes. */
+  private queue: Promise<void> = Promise.resolve()
 
   constructor(library: AutoTagLibrary, picker: TagPicker, retryAfterMs = RETRY_AFTER_MS) {
     this.library = library
@@ -80,7 +82,13 @@ export class AutoTagger {
   }
 
   /** Tags one new title. Never rejects: a failure is logged and tried once more later. */
-  async tagNow(pageId: string, isRetry = false): Promise<void> {
+  tagNow(pageId: string, isRetry = false): Promise<void> {
+    const run = this.queue.then(() => this.tagOne(pageId, isRetry))
+    this.queue = run
+    return run
+  }
+
+  private async tagOne(pageId: string, isRetry: boolean): Promise<void> {
     try {
       await this.tag(pageId)
     } catch (e) {

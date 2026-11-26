@@ -38,7 +38,7 @@ const tagger = new AutoTagger(library, new ClaudeTagPicker())
 // The watched loop is also what refreshes Jellyfin, so the app's onEdgar answers come from it.
 enricher.start()
 // Suggestions saved while OMDb was out get their details (RT, poster) once it's back.
-const checkSuggestions = () => void checkUnverified(store, lookup).catch((e) => console.error('checking suggestions:', e))
+const checkSuggestions = () => void library.listTitles().then((owned) => checkUnverified(store, lookup, { owned })).catch((e) => console.error('checking suggestions:', e))
 checkSuggestions()
 setInterval(checkSuggestions, 30 * 60_000)
 // RT for titles and suggestions looked up after OMDb dropped Rotten Tomatoes.

@@ -35,6 +35,8 @@ export interface Suggestion {
   /** Looked-up details, as page fields. */
   fields: Partial<Record<FieldKey, string>>
   poster?: string
+  /** When a details check last found nothing for it (ms), so it isn't searched again for a day. */
+  checkedAt?: number
   state: SuggestionState
   createdAt: number
 }
@@ -89,6 +91,7 @@ export class Store {
       create table if not exists posters (imdb text primary key, url text not null);
       create table if not exists moved (id text primary key, page_id text not null);
       create table if not exists tag_groups (tag text primary key collate nocase, grp text not null);
+      create table if not exists rt_misses (imdb text primary key collate nocase, at integer not null);
     `)
   }
 
@@ -287,6 +290,16 @@ export class Store {
   updateSuggestion(s: Suggestion): void {
     const { id, state: _state, createdAt: _createdAt, ...doc } = s
     this.db.prepare('update suggestions set doc = ? where id = ?').run(JSON.stringify(doc), id)
+  }
+
+  /** When MDBList last had no Rotten Tomatoes score for this IMDb id (ms), if it was ever asked. */
+  rtMissAt(imdb: string): number | undefined {
+    const row = this.db.prepare('select at from rt_misses where imdb = ?').get(imdb) as { at: number } | undefined
+    return row ? Number(row.at) : undefined
+  }
+
+  setRtMiss(imdb: string, at: number): void {
+    this.db.prepare('insert into rt_misses (imdb, at) values (?, ?) on conflict(imdb) do update set at = excluded.at').run(imdb, at)
   }
 
   setSuggestionState(id: string, state: SuggestionState): void {

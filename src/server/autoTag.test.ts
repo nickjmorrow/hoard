@@ -85,6 +85,23 @@ describe('AutoTagger', () => {
     expect(pick).not.toHaveBeenCalled()
   })
 
+  it('tags one title at a time', async () => {
+    const lib = fakeLibrary([title({ name: 'Harvest Rites' }), title({ name: 'Ember Keep' })])
+    let running = 0
+    let most = 0
+    const pick = async () => {
+      running++
+      most = Math.max(most, running)
+      await new Promise((r) => setTimeout(r, 5))
+      running--
+      return '["Village Horror"]'
+    }
+    const tagger = new AutoTagger(lib, { pick })
+    await Promise.all([tagger.tagNow('Harvest Rites'), tagger.tagNow('Ember Keep')])
+    expect(most).toBe(1)
+    expect(lib.titles.get('Ember Keep')!.tags).toEqual(['Village Horror'])
+  })
+
   it('logs a failure and tries once more later', async () => {
     const lib = fakeLibrary([title({ name: 'Harvest Rites' })])
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})

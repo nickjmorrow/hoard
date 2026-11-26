@@ -105,6 +105,16 @@ describe('suggestions', () => {
     expect((await send('POST', '/api/suggestions/nope/restore', {})).status).toBe(404)
   })
 
+  test('keeping the same suggestion twice adds it once', async () => {
+    const { library, send } = setup()
+    await library.createTitle({ name: 'Mirror House', type: 'movie', fields: {}, tags: ['Cozy Mystery'] })
+    const made = await (await send('POST', '/api/suggest', { tag: 'Cozy Mystery' })).json()
+    const id = made.suggestions[0].id
+    expect((await send('POST', `/api/suggestions/${id}/keep`, {})).status).toBe(200)
+    expect((await send('POST', `/api/suggestions/${id}/keep`, {})).status).toBe(409)
+    expect((await library.listTitles()).filter((t) => t.name === 'Far Field')).toHaveLength(1)
+  })
+
   test('ask: a question in plain words gets owned titles that answer it and new ones, from the whole library', async () => {
     const { library, send, prompts } = setup([
       { name: 'Far Field', year: 2022, type: 'movie', why: 'Snowbound and slow.' },

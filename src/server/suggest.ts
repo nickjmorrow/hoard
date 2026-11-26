@@ -237,29 +237,53 @@ export async function verifySuggestions(
   return out
 }
 
+const DAY = 24 * 3600_000
+/** How many turned-down titles the prompt lists as "never suggest". */
+export const PASSED_IN_PROMPT = 200
+
+/** Saved without OMDb's details: never matched (no IMDb id), or matched but the details call failed. */
+function needsCheck(s: Suggestion): boolean {
+  return !s.imdb || (!s.poster && !s.fields.runtime && !s.fields.summary)
+}
+
 /**
  * Suggestions saved unchecked while OMDb was out get their details (RT, runtime, poster) once it's back:
- * up to `max` per pass, stopping when OMDb is out again. One OMDb can't find stays as it was.
+ * up to `max` per pass, stopping when OMDb is out again. One OMDb can't find isn't searched again for a day.
+ * One that turns out to be a title already in the library, or another waiting suggestion, is passed.
  */
-export async function checkUnverified(store: Store, lookup: Lookup, max = 20): Promise<number> {
+export async function checkUnverified(store: Store, lookup: Lookup, opts: { max?: number; owned?: Title[]; now?: () => number } = {}): Promise<number> {
+  const { max = 20, owned = [], now = Date.now } = opts
+  const waiting = store.suggestions('new')
+  const due = waiting.filter((x) => needsCheck(x) && (x.checkedAt === undefined || now() - x.checkedAt > DAY)).slice(0, max)
   let done = 0
-  for (const s of store.suggestions('new').filter((x) => !x.imdb).slice(0, max)) {
+  for (const s of due) {
     try {
-      const want = normalizeName(s.name)
-      const hits = (await lookup.search(s.type, s.name))
-        .filter((r) => normalizeName(r.name) === want && (s.year === undefined || (r.year !== undefined && Math.abs(r.year - s.year) <= 1)))
-      const hit = hits[0]
-      if (!hit) continue
-      const { poster, ...fields } = await lookup.details(s.type, hit.id)
-      if (poster) store.setPoster(hit.id, poster)
-      store.updateSuggestion({
-        ...s,
-        name: hit.name,
-        imdb: hit.id,
-        fields: { ...s.fields, imdb: hit.id, ...(fields as Partial<Record<FieldKey, string>>) },
-        ...(hit.year ? { year: hit.year } : {}),
-        ...(poster ? { poster } : {}),
-      })
+      let id = s.imdb
+      let name = s.name
+      let year = s.year
+      if (!id) {
+        const want = normalizeName(s.name)
+        const hit = (await lookup.search(s.type, s.name))
+          .find((r) => normalizeName(r.name) === want && (s.year === undefined || (r.year !== undefined && Math.abs(r.year - s.year) <= 1)))
+        if (!hit) {
+          store.updateSuggestion({ ...s, checkedAt: now() })
+          continue
+        }
+        id = hit.id
+        name = hit.name
+        year = hit.year ?? s.year
+      }
+      const taken = new Set([...owned.map((t) => t.imdb), ...waiting.filter((x) => x.id !== s.id).map((x) => x.imdb)]
+        .filter((x): x is string => !!x).map((x) => x.toLowerCase()))
+      if (!s.imdb && taken.has(id.toLowerCase())) {
+        store.setSuggestionState(s.id, 'passed')
+        continue
+      }
+      const { poster, ...fields } = await lookup.details(s.type, id)
+      if (poster) store.setPoster(id, poster)
+      const { checkedAt: _checkedAt, ...rest } = s
+      const filled = { ...rest, name, imdb: id, fields: { ...s.fields, imdb: id, ...(fields as Partial<Record<FieldKey, string>>) }, ...(year ? { year } : {}), ...(poster ? { poster } : {}) }
+      store.updateSuggestion(needsCheck(filled) ? { ...filled, checkedAt: now() } : filled)
       done++
     } catch (e) {
       if (e instanceof LookupUnavailableError) break
@@ -289,7 +313,8 @@ export async function runSuggest(
   deps: { suggester: Suggester; lookup: Lookup; store: Store; library: Title[] },
 ): Promise<{ suggestions: Suggestion[]; owned: OwnedPick[] }> {
   const earlier = deps.store.suggestions()
-  const passed = earlier.filter((s) => s.state === 'passed')
+  // The most recent turn-downs only, so the prompt doesn't grow forever.
+  const passed = earlier.filter((s) => s.state === 'passed').slice(0, PASSED_IN_PROMPT)
   const raw = await deps.suggester.suggest(buildPrompt(req, deps.library, passed))
   const verified = await verifySuggestions(raw.filter((r) => !r.have), deps.lookup, deps.library, earlier)
   for (const s of verified) if (s.poster && s.imdb) deps.store.setPoster(s.imdb, s.poster)
