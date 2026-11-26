@@ -39,7 +39,9 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('The Long Table (2017); movie; watched, rated 5/5; directed by June Halloway; note: "The salt cellar!"')
     expect(prompt).toContain('Mirror House (2019); movie; on the list, not watched yet')
     expect(prompt).toContain('Suggest 8 movies')
-    expect(prompt).toContain('The Long Table (2017); Mirror House (2019); Low Tide (2019)')
+    expect(prompt).toContain('never suggest them as new:\nThe Long Table (2017); Mirror House (2019)')
+    expect(prompt).toContain('They turned these down; never suggest them: Low Tide (2019)')
+    expect(prompt).toContain('"have": true')
   })
 
   it('names the viewer from HOARD_USER_NAME, else "someone"', () => {
@@ -62,7 +64,7 @@ describe('runSuggest', () => {
       ],
     }
     const library = [title({ name: 'The Long Table', year: 2017, imdb: 'tt5000448', tags: ['Cozy Mystery'] })]
-    const made = await runSuggest({ source: 'Cozy Mystery', tag: 'Cozy Mystery', seeds: library, count: 4 }, { suggester, lookup, store, library })
+    const { suggestions: made } = await runSuggest({ source: 'Cozy Mystery', tag: 'Cozy Mystery', seeds: library, count: 4 }, { suggester, lookup, store, library })
     expect(made.map((s) => s.name)).toEqual(['Far Field', 'Glass Stairs'])
     expect(made[0]).toMatchObject({ imdb: 'tt10000984', year: 2022, why: 'Halloway again.', tag: 'Cozy Mystery', poster: 'https://img/tt10000984.jpg' })
     expect(made[0]!.fields).toEqual({ imdb: 'tt10000984', year: '2022', director: 'Someone' })
@@ -70,6 +72,61 @@ describe('runSuggest', () => {
 
     // A second round never repeats what was suggested before.
     const again = await runSuggest({ source: 'Cozy Mystery', seeds: library, count: 4 }, { suggester, lookup, store, library })
-    expect(again).toEqual([])
+    expect(again.suggestions).toEqual([])
+  })
+
+  it('returns the owned titles Claude picked, matched to the library, never a seed or twice, and never stored', async () => {
+    const store = new Store(':memory:')
+    const longTable = title({ name: 'The Long Table', year: 2017, pageId: 'p-longtable' })
+    const mirror = title({ name: 'Mirror House', year: 2019, pageId: 'p-mirror' })
+    const quiet = title({ name: 'Quiet Hours', year: 2022, pageId: 'p-quiet' })
+    const suggester: Suggester = {
+      suggest: async () => [
+        { name: 'Mirror House', year: 2019, type: 'movie', why: 'Halloway too.', have: true },
+        { name: 'quiet hours', type: 'movie', why: 'Slow dread.', have: true },
+        { name: 'The Long Table', year: 2017, type: 'movie', why: 'A seed.', have: true },
+        { name: 'Mirror House', year: 2019, type: 'movie', why: 'Twice.', have: true },
+        { name: 'Not Owned', year: 2001, type: 'movie', why: 'Made up.', have: true },
+      ],
+    }
+    const out = await runSuggest({ source: 'The Long Table', seeds: [longTable], count: 4 }, { suggester, lookup, store, library: [longTable, mirror, quiet] })
+    expect(out.owned).toEqual([{ pageId: 'p-mirror', why: 'Halloway too.' }, { pageId: 'p-quiet', why: 'Slow dread.' }])
+    expect(out.suggestions).toEqual([])
+    expect(store.suggestions()).toEqual([])
+  })
+})
+
+describe('verifySuggestions when OMDb is out', () => {
+  it('keeps the rest unchecked instead of failing, still skipping what is in the library', async () => {
+    const { verifySuggestions } = await import('./suggest.ts')
+    const { LookupUnavailableError } = await import('./lookupError.ts')
+    let searches = 0
+    const down: Lookup = {
+      search: async (_type, q) => {
+        searches++
+        if (q === 'Far Field') return [{ source: 'omdb', id: 'tt10000984', name: 'Far Field', year: 2022, detail: '' }]
+        throw new LookupUnavailableError('OMDb daily limit reached')
+      },
+      details: async (_type, id) => ({ imdb: id, year: '2022' }),
+    }
+    const library = [title({ name: 'The Long Table', year: 2017 })]
+    const out = await verifySuggestions([
+      { name: 'Far Field', year: 2022, type: 'movie', why: 'Halloway.' },
+      { name: 'Night Ferry', year: 2022, type: 'movie', why: 'Crossing.' },
+      { name: 'The Long Table', year: 2017, type: 'movie', why: 'Has it.' },
+      { name: 'Paper Lanterns', year: 2022, type: 'movie', why: 'Festival.' },
+    ], down, library, [])
+    expect(out.map((s) => [s.name, s.imdb ?? null])).toEqual([['Far Field', 'tt10000984'], ['Night Ferry', null], ['Paper Lanterns', null]])
+    expect(out[1]).toMatchObject({ year: 2022, fields: { year: '2022' }, why: 'Crossing.' })
+    expect(searches).toBe(2)
+  })
+})
+
+describe('parseSuggestions', () => {
+  it('keeps the have mark on owned picks', () => {
+    expect(parseSuggestions('[{"name":"Mirror House","year":2019,"type":"movie","why":"Halloway.","have":true},{"name":"Far Field","type":"movie","why":"New."}]')).toEqual([
+      { name: 'Mirror House', year: 2019, type: 'movie', why: 'Halloway.', have: true },
+      { name: 'Far Field', type: 'movie', why: 'New.' },
+    ])
   })
 })

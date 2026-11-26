@@ -77,4 +77,31 @@ describe('suggestions', () => {
     expect(prompts[0]).not.toContain('- Toybox')
     expect((await send('POST', '/api/suggest', { genre: 'Western' })).status).toBe(400)
   })
+
+  test('a kept suggestion is handed to onCreated, like any new title', async () => {
+    const store = new Store(':memory:')
+    const library = new Library(store)
+    await library.createTitle({ name: 'Mirror House', type: 'movie', fields: {}, tags: ['Cozy Mystery'] })
+    const created: string[] = []
+    const app = createApp({
+      library, store, onCreated: (id) => created.push(id),
+      availability: { isUp: () => true, onEdgar: () => false, jellyfinId: () => null },
+      lookup: { search: async (_type, q) => [{ source: 'omdb', id: `tt-${q}`, name: q, year: 2022, detail: '' }], details: async (_type, id) => ({ imdb: id }) },
+      suggester: { suggest: async () => [{ name: 'Far Field', year: 2022, type: 'movie', why: 'Halloway.' }] },
+    })
+    const send = (path: string, body: unknown) => app.request(path, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })
+    const made = await (await send('/api/suggest', { tag: 'Cozy Mystery' })).json()
+    const kept = await (await send(`/api/suggestions/${made.suggestions[0].id}/keep`, {})).json()
+    expect(created).toEqual([kept.title.pageId])
+  })
+
+  test('restore puts a passed suggestion back in the inbox', async () => {
+    const { library, send } = setup()
+    await library.createTitle({ name: 'Mirror House', type: 'movie', fields: {}, tags: ['Cozy Mystery'] })
+    const made = await (await send('POST', '/api/suggest', { tag: 'Cozy Mystery' })).json()
+    await send('POST', `/api/suggestions/${made.suggestions[0].id}/pass`, {})
+    expect((await send('POST', `/api/suggestions/${made.suggestions[0].id}/restore`, {})).status).toBe(200)
+    expect((await (await send('GET', '/api/suggestions')).json()).suggestions.map((s: { name: string }) => s.name)).toEqual(['Far Field'])
+    expect((await send('POST', '/api/suggestions/nope/restore', {})).status).toBe(404)
+  })
 })

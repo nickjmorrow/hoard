@@ -8,10 +8,18 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DetailKey, FieldKey, MediaType, Title } from '../shared/title.ts'
 import { normalizeName } from './enricher.ts'
-import type { Lookup } from './ports.ts'
+import { LookupUnavailableError } from './lookupError.ts'
+import type { Lookup, LookupResult } from './ports.ts'
 import type { Store, Suggestion } from './store.ts'
 
-export interface RawSuggestion { name: string; year?: number; type: MediaType; why: string }
+/** `have`: a title already in the library that fits with the seeds, rather than a new one. */
+export interface RawSuggestion { name: string; year?: number; type: MediaType; why: string; have?: boolean }
+
+/** A title already in the library that Claude says fits with the seeds, and why. */
+export interface OwnedPick { pageId: string; why: string }
+
+/** How many owned titles to ask for alongside the new ones. */
+export const OWNED_PICKS = 8
 
 /** Turns a prompt into suggestions. The real one runs Claude; tests pass a fake. */
 export interface Suggester {
@@ -56,10 +64,8 @@ export function buildPrompt(req: SuggestRequest, library: Title[], passed: Sugge
   const favorites = library
     .filter((t) => t.status === 'done' && (t.rating ?? 0) >= 5 && t.type !== 'game' && !req.seeds.includes(t))
     .slice(0, 25)
-  const avoid = [
-    ...library.filter((t) => t.type !== 'game').map((t) => `${t.name}${t.year ? ` (${t.year})` : ''}`),
-    ...passed.map((s) => `${s.name}${s.year ? ` (${s.year})` : ''}`),
-  ]
+  const label = (x: { name: string; year?: number }) => `${x.name}${x.year ? ` (${x.year})` : ''}`
+  const owned = library.filter((t) => t.type !== 'game').map(label)
   return [
     `You recommend ${kind} to ${who}, who keeps a careful list of what they watch.`,
     '',
@@ -74,11 +80,14 @@ export function buildPrompt(req: SuggestRequest, library: Title[], passed: Sugge
     `Suggest ${req.count} ${kind} they don't already have that share what makes "${req.source}" work for them. Real, released titles only. Mix the well known with the overlooked.`,
     'For each, one sentence of why, naming what it has in common with their titles. No spoilers.',
     '',
-    'They already have or turned down all of these, so never suggest them:',
-    avoid.join('; '),
+    'They already have all of these, so never suggest them as new:',
+    owned.join('; '),
+    passed.length ? `They turned these down; never suggest them: ${passed.map(label).join('; ')}` : '',
+    '',
+    `Also pick up to ${OWNED_PICKS} titles from the list they already have (other than the ones they grouped) that belong with "${req.source}", so they see what they own that fits. Mark those with "have": true and give the same one sentence of why.`,
     '',
     'Reply with only a JSON array, no prose and no code fence:',
-    '[{"name": "Title", "year": 2019, "type": "movie" or "show", "why": "One sentence."}]',
+    '[{"name": "Title", "year": 2019, "type": "movie" or "show", "why": "One sentence.", "have": false}]',
   ].filter((line, i, all) => line !== '' || all[i - 1] !== '').join('\n')
 }
 
@@ -102,12 +111,15 @@ export function parseSuggestions(text: string): RawSuggestion[] {
     const why = typeof r.why === 'string' ? r.why.trim() : ''
     const type: MediaType = r.type === 'show' ? 'show' : 'movie'
     const year = typeof r.year === 'number' && Number.isInteger(r.year) ? r.year : typeof r.year === 'string' && /^\d{4}$/.test(r.year) ? Number(r.year) : undefined
-    if (name) out.push({ name, type, why, ...(year ? { year } : {}) })
+    if (name) out.push({ name, type, why, ...(year ? { year } : {}), ...(r.have === true ? { have: true } : {}) })
   }
   return out
 }
 
-/** Checks each suggestion against OMDb and drops anything already in the library, passed on, or that can't be found. */
+/**
+ * Checks each suggestion against OMDb and drops anything already in the library, passed on, or that can't be found.
+ * If OMDb is out (its daily limit), the rest are kept unchecked rather than lost: they get their details once added.
+ */
 export async function verifySuggestions(
   raw: RawSuggestion[],
   lookup: Lookup,
@@ -118,17 +130,38 @@ export async function verifySuggestions(
     ...library.flatMap((t) => (t.imdb ? [t.imdb.toLowerCase()] : [])),
     ...earlier.flatMap((s) => (s.imdb ? [s.imdb.toLowerCase()] : [])),
   ])
-  const knownNames = new Set(library.map((t) => `${normalizeName(t.name)}|${t.year ?? ''}`))
+  const knownNames = new Set([...library, ...earlier].map((t) => `${normalizeName(t.name)}|${t.year ?? ''}`))
   const out: Omit<Suggestion, 'id' | 'state' | 'createdAt' | 'source' | 'tag'>[] = []
+  let lookupDown = false
   for (const s of raw) {
-    if (knownNames.has(`${normalizeName(s.name)}|${s.year ?? ''}`)) continue
-    const results = await lookup.search(s.type, s.name)
+    const nameKey = `${normalizeName(s.name)}|${s.year ?? ''}`
+    if (knownNames.has(nameKey)) continue
+    let results: LookupResult[] = []
+    if (!lookupDown) {
+      try {
+        results = await lookup.search(s.type, s.name)
+      } catch (e) {
+        if (!(e instanceof LookupUnavailableError)) throw e
+        lookupDown = true
+      }
+    }
+    if (lookupDown) {
+      knownNames.add(nameKey)
+      out.push({ name: s.name, type: s.type, why: s.why, fields: s.year ? { year: String(s.year) } : {}, ...(s.year ? { year: s.year } : {}) })
+      continue
+    }
     const want = normalizeName(s.name)
     const hits = results.filter((r) => normalizeName(r.name) === want && (s.year === undefined || (r.year !== undefined && Math.abs(r.year - s.year) <= 1)))
     const hit = hits[0]
     if (!hit || known.has(hit.id.toLowerCase())) continue
     known.add(hit.id.toLowerCase())
-    const details: Partial<Record<DetailKey, string>> = await lookup.details(s.type, hit.id)
+    let details: Partial<Record<DetailKey, string>> = {}
+    try {
+      details = await lookup.details(s.type, hit.id)
+    } catch (e) {
+      if (!(e instanceof LookupUnavailableError)) throw e
+      lookupDown = true
+    }
     const { poster, ...fields } = details
     out.push({
       name: hit.name,
@@ -143,17 +176,32 @@ export async function verifySuggestions(
   return out
 }
 
-/** The full round trip: prompt, Claude, OMDb, the store. Returns the new suggestions. */
+/** The owned titles Claude picked, matched to the library by name (and year when given); never a seed, never twice. */
+export function matchOwned(raw: RawSuggestion[], library: Title[], seeds: Title[]): OwnedPick[] {
+  const seedIds = new Set(seeds.map((t) => t.pageId))
+  const out: OwnedPick[] = []
+  for (const r of raw) {
+    const want = normalizeName(r.name)
+    const named = library.filter((t) => t.type !== 'game' && normalizeName(t.name) === want)
+    const t = named.find((x) => r.year === undefined || x.year === r.year) ?? (named.length === 1 ? named[0] : undefined)
+    if (!t || seedIds.has(t.pageId) || out.some((o) => o.pageId === t.pageId)) continue
+    out.push({ pageId: t.pageId, why: r.why })
+  }
+  return out.slice(0, OWNED_PICKS)
+}
+
+/** The full round trip: prompt, Claude, OMDb, the store. Returns the new suggestions and the owned titles that fit. */
 export async function runSuggest(
   req: SuggestRequest,
   deps: { suggester: Suggester; lookup: Lookup; store: Store; library: Title[] },
-): Promise<Suggestion[]> {
+): Promise<{ suggestions: Suggestion[]; owned: OwnedPick[] }> {
   const earlier = deps.store.suggestions()
   const passed = earlier.filter((s) => s.state === 'passed')
   const raw = await deps.suggester.suggest(buildPrompt(req, deps.library, passed))
-  const verified = await verifySuggestions(raw, deps.lookup, deps.library, earlier)
+  const verified = await verifySuggestions(raw.filter((r) => !r.have), deps.lookup, deps.library, earlier)
   for (const s of verified) if (s.poster && s.imdb) deps.store.setPoster(s.imdb, s.poster)
-  return deps.store.addSuggestions(verified.map((s) => ({ ...s, source: req.source, ...(req.tag ? { tag: req.tag } : {}) })))
+  const suggestions = deps.store.addSuggestions(verified.map((s) => ({ ...s, source: req.source, ...(req.tag ? { tag: req.tag } : {}) })))
+  return { suggestions, owned: matchOwned(raw.filter((r) => r.have), deps.library, req.seeds) }
 }
 
 /** $CLAUDE_BIN, else the copy the Claude app keeps current (newest), else Homebrew's. */
@@ -173,7 +221,38 @@ export function claudeBin(home = homedir()): string {
   return found[0]?.path ?? '/opt/homebrew/bin/claude'
 }
 
-/** Runs `claude -p` with no tools, in an empty folder so no project settings load. */
+/** Runs `claude -p` with no tools, in an empty folder so no project settings load, and returns its reply. */
+export function runClaude(prompt: string, opts: { model: string; timeoutMs: number }): Promise<string> {
+  const cwd = mkdtempSync(join(tmpdir(), 'hoard-claude-'))
+  return new Promise((resolve, reject) => {
+    const child = spawn(claudeBin(), [
+      '-p', '--output-format', 'json', '--model', opts.model,
+      '--tools', '', '--permission-mode', 'dontAsk', '--setting-sources', 'project',
+    ], { cwd, stdio: ['pipe', 'pipe', 'pipe'] })
+    let out = ''
+    let err = ''
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      reject(new SuggestError('Claude took too long to answer'))
+    }, opts.timeoutMs)
+    child.stdout.on('data', (d) => (out += d))
+    child.stderr.on('data', (d) => (err += d))
+    child.on('error', (e) => { clearTimeout(timer); reject(new SuggestError(`couldn't start Claude: ${e.message}`)) })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      let reply: { result?: unknown; is_error?: unknown } | null = null
+      try { reply = JSON.parse(out) } catch { /* reported below */ }
+      if (code !== 0 || !reply || reply.is_error === true || typeof reply.result !== 'string') {
+        const why = typeof reply?.result === 'string' ? reply.result : err.trim() || `exit ${code}`
+        reject(new SuggestError(`Claude couldn't answer: ${why.slice(0, 300)}`))
+        return
+      }
+      resolve(reply.result)
+    })
+    child.stdin.end(prompt)
+  })
+}
+
 export class ClaudeSuggester implements Suggester {
   private model: string
   private timeoutMs: number
@@ -183,34 +262,7 @@ export class ClaudeSuggester implements Suggester {
     this.timeoutMs = opts.timeoutMs ?? 240_000
   }
 
-  suggest(prompt: string): Promise<RawSuggestion[]> {
-    const cwd = mkdtempSync(join(tmpdir(), 'hoard-suggest-'))
-    return new Promise((resolve, reject) => {
-      const child = spawn(claudeBin(), [
-        '-p', '--output-format', 'json', '--model', this.model,
-        '--tools', '', '--permission-mode', 'dontAsk', '--setting-sources', 'project',
-      ], { cwd, stdio: ['pipe', 'pipe', 'pipe'] })
-      let out = ''
-      let err = ''
-      const timer = setTimeout(() => {
-        child.kill('SIGTERM')
-        reject(new SuggestError('Claude took too long to answer'))
-      }, this.timeoutMs)
-      child.stdout.on('data', (d) => (out += d))
-      child.stderr.on('data', (d) => (err += d))
-      child.on('error', (e) => { clearTimeout(timer); reject(new SuggestError(`couldn't start Claude: ${e.message}`)) })
-      child.on('close', (code) => {
-        clearTimeout(timer)
-        let reply: { result?: unknown; is_error?: unknown } | null = null
-        try { reply = JSON.parse(out) } catch { /* reported below */ }
-        if (code !== 0 || !reply || reply.is_error === true || typeof reply.result !== 'string') {
-          const why = typeof reply?.result === 'string' ? reply.result : err.trim() || `exit ${code}`
-          reject(new SuggestError(`Claude couldn't suggest anything: ${why.slice(0, 300)}`))
-          return
-        }
-        try { resolve(parseSuggestions(reply.result)) } catch (e) { reject(e) }
-      })
-      child.stdin.end(prompt)
-    })
+  async suggest(prompt: string): Promise<RawSuggestion[]> {
+    return parseSuggestions(await runClaude(prompt, { model: this.model, timeoutMs: this.timeoutMs }))
   }
 }

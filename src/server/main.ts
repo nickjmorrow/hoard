@@ -3,6 +3,7 @@
 import { serve } from '@hono/node-server'
 import { createApp } from './app.ts'
 import { serverConfig } from './config.ts'
+import { AutoTagger, ClaudeTagPicker } from './autoTag.ts'
 import { startBackups } from './backup.ts'
 import { Enricher } from './enricher.ts'
 import { Library } from './library.ts'
@@ -29,6 +30,7 @@ const lookup = createLookup() // OMDB_API_KEY; without it, movies and shows are 
 const jellyfin = createJellyfin() // JELLYFIN_URL, JELLYFIN_API_KEY; without them, onEdgar is unknown
 const enricher = new Enricher(library, lookup)
 enricher.onPoster = (imdb, url) => store.setPoster(imdb, url)
+const tagger = new AutoTagger(library, new ClaudeTagPicker())
 
 // The watched loop is also what refreshes Jellyfin, so the app's onEdgar answers come from it.
 enricher.start()
@@ -40,7 +42,8 @@ const app = createApp({
   lookup,
   store,
   suggester: new ClaudeSuggester(),
-  onCreated: (pageId) => void enricher.enrichNow(pageId),
+  // Details first, so Claude sees the genre and summary when it picks tags.
+  onCreated: (pageId) => void enricher.enrichNow(pageId).then(() => tagger.tagNow(pageId)),
 })
 serve({ fetch: app.fetch, hostname: '127.0.0.1', port }, (info) => {
   console.log(`hoard listening on http://127.0.0.1:${info.port}`)

@@ -24,7 +24,7 @@ export interface AppDeps {
   lookup: Lookup
   /** ms since epoch; injectable so tests get a fixed "today". */
   now?: () => number
-  /** Called with the page id of each newly created title (not an existing one), without waiting; main.ts enriches it. */
+  /** Called with the page id of each newly created title (not an existing one), without waiting; main.ts enriches and tags it. */
   onCreated?: (pageId: string) => void
   /** Hoard's store (posters, suggestions); without it the suggestion routes answer 503. */
   store?: Store
@@ -318,7 +318,7 @@ export function createApp(deps: AppDeps): Hono {
     if (!seeds.length) throw new BadRequest(`nothing in ${source || 'that selection'} to go on`)
     const made = await runSuggest({ source, seeds, ...(tag ? { tag } : {}), ...(prompt ? { prompt } : {}), ...(type ? { type } : {}), count },
       { suggester, lookup, store, library: all })
-    return c.json({ suggestions: made })
+    return c.json(made)
   })
 
   app.get('/api/suggestions', (c) => {
@@ -338,6 +338,7 @@ export function createApp(deps: AppDeps): Hono {
       tags: s.tag ? [s.tag] : [],
     })
     store.setSuggestionState(s.id, 'kept')
+    deps.onCreated?.(title.pageId)
     return c.json({ title: s.poster ? { ...title, poster: s.poster } : title })
   })
 
@@ -345,6 +346,14 @@ export function createApp(deps: AppDeps): Hono {
     const { store } = suggestDeps()
     if (!store.suggestion(c.req.param('id'))) return notFound(c)
     store.setSuggestionState(c.req.param('id'), 'passed')
+    return c.json({ ok: true })
+  })
+
+  // Undo for Keep, Seen It and Not for Me: the suggestion goes back in the inbox (the app removes any title Keep made).
+  app.post('/api/suggestions/:id/restore', (c) => {
+    const { store } = suggestDeps()
+    if (!store.suggestion(c.req.param('id'))) return notFound(c)
+    store.setSuggestionState(c.req.param('id'), 'new')
     return c.json({ ok: true })
   })
 
